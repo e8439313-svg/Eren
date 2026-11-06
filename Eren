@@ -1,0 +1,428 @@
+-- Secure execution wrapper for Delta mobile environment
+local success, errorMessage = pcall(function()
+    local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+    
+    local Window = Rayfield:CreateWindow({
+       Name = "👑 EREN OWNER - UTILITY HUB 👑",
+       LoadingTitle = "Loading Eren Owner Hub...",
+       LoadingSubtitle = "by EREN",
+       ConfigurationSaving = {
+          Enabled = true,
+          FolderName = "ErenOwnerHub",
+          FileName = "Config"
+       },
+       Discord = {
+          Enabled = false,
+          Invite = "noinvite",
+          RememberJoins = true
+       },
+       KeySystem = false,
+    })
+
+    -- Services & Variables
+    local Players = game:GetService("Players")
+    local UserInputService = game:GetService("UserInputService")
+    local RunService = game:GetService("RunService")
+    local LocalPlayer = Players.LocalPlayer
+
+    -- Global Settings Tables
+    getgenv().ErenSettings = {
+       WalkSpeed = 16,
+       WalkSpeedEnabled = false,
+       InfiniteJump = false,
+       NoClip = false,
+       AntiPush = false,
+       AutoSwing = false,
+       AutoBabyPickup = false,
+       AutoCollect = false,
+       TeleportBack = false,
+       IslandPathHighlighter = false,
+       AntiRGL = false,
+       HitboxEnabled = false,
+       HitboxSize = 4,
+       Whitelist = {},
+       FriendProtection = true,
+       AntiFall = false
+    }
+
+    -- Helper Function: Friend & Whitelist Check
+    local function IsWhitelisted(player)
+       if getgenv().ErenSettings.FriendProtection then
+          local ok, res = pcall(function() return LocalPlayer:IsFriendsWith(player.UserId) end)
+          if ok and res then return true end
+       end
+       for _, name in ipairs(getgenv().ErenSettings.Whitelist) do
+          if player.Name:lower() == name:lower() then return true end
+       end
+       return false
+    end
+
+    -- Strict Anti-RGL Hook (Blocks server kill/elimination calls)
+    local oldNamecall
+    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+       local method = getnamecallmethod()
+       if getgenv().ErenSettings.AntiRGL and (method == "FireServer" or method == "InvokeServer") then
+          local name = self.Name:lower()
+          if name:find("rlgl") or name:find("redlight") or name:find("fail") or name:find("eliminate") or name:find("kill") or name:find("punish") then
+             return -- Blocks punishment packet entirely
+          end
+       end
+       return oldNamecall(self, ...)
+    end)
+
+    -- Auto Baby Pickup Live Listener
+    task.spawn(function()
+       workspace.DescendantAdded:Connect(function(descendant)
+          if getgenv().ErenSettings.AutoBabyPickup then
+             pcall(function()
+                local name = descendant.Name:lower()
+                if name:find("baby") or name:find("doll") or name:find("child") then
+                   task.wait(0.02)
+                   if descendant:IsA("ProximityPrompt") then
+                      fireproximityprompt(descendant)
+                   elseif descendant:IsA("ClickDetector") then
+                      fireclickdetector(descendant)
+                   elseif descendant:IsA("BasePart") and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                      firetouchinterest(LocalPlayer.Character.HumanoidRootPart, descendant, 0)
+                      firetouchinterest(LocalPlayer.Character.HumanoidRootPart, descendant, 1)
+                   end
+                end
+             end)
+          end
+       end)
+    end)
+
+    -- Fully Fixed Detective Auto Collect Logic (Scans all items instantly)
+    task.spawn(function()
+       while true do
+          task.wait(0.1)
+          if getgenv().ErenSettings.AutoCollect then
+             pcall(function()
+                local char = LocalPlayer.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                   local originalPos = hrp.CFrame
+                   for _, obj in ipairs(workspace:GetDescendants()) do
+                      local name = obj.Name:lower()
+                      -- Broadened keywords to catch all kinds of evidence / clues / briefcases / drops
+                      if name:find("evidence") or name:find("clue") or name:find("briefcase") or name:find("item") or name:find("drop") then
+                         if obj:IsA("ProximityPrompt") then
+                            fireproximityprompt(obj)
+                            if getgenv().ErenSettings.TeleportBack then
+                               task.wait(0.05)
+                               hrp.CFrame = originalPos
+                            end
+                         elseif obj:IsA("ClickDetector") then
+                            fireclickdetector(obj)
+                            if getgenv().ErenSettings.TeleportBack then
+                               task.wait(0.05)
+                               hrp.CFrame = originalPos
+                            end
+                         elseif obj:IsA("BasePart") then
+                            firetouchinterest(hrp, obj, 0)
+                            firetouchinterest(hrp, obj, 1)
+                            if getgenv().ErenSettings.TeleportBack then
+                               task.wait(0.05)
+                               hrp.CFrame = originalPos
+                            end
+                         end
+                      end
+                   end
+                end
+             end)
+          end
+       end
+    end)
+
+    -- Island Path Highlighter Loop
+    task.spawn(function()
+       while true do
+          task.wait(1)
+          pcall(function()
+             for _, obj in ipairs(workspace:GetDescendants()) do
+                if getgenv().ErenSettings.IslandPathHighlighter then
+                   if obj.Name:lower():find("island") or obj.Name:lower():find("path") or obj.Name:lower():find("boat") then
+                      if obj:IsA("BasePart") and not obj:FindFirstChild("ErenHighlight") then
+                         local highlight = Instance.new("Highlight")
+                         highlight.Name = "ErenHighlight"
+                         highlight.FillColor = Color3.fromRGB(0, 255, 255)
+                         highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                         highlight.Parent = obj
+                      end
+                   end
+                else
+                   if obj.Name == "ErenHighlight" then
+                      obj:Destroy()
+                   end
+                end
+             end
+          end)
+       end
+    end)
+
+    -- Core Game Loops (WalkSpeed, NoClip, Hitbox, Anti-Push, Auto Swing)
+    RunService.RenderStepped:Connect(function()
+       local char = LocalPlayer.Character
+       if char and char:FindFirstChildOfClass("Humanoid") then
+          local humanoid = char:FindFirstChildOfClass("Humanoid")
+          local hrp = char:FindFirstChild("HumanoidRootPart")
+
+          if getgenv().ErenSettings.WalkSpeedEnabled then
+             humanoid.WalkSpeed = getgenv().ErenSettings.WalkSpeed
+          end
+
+          if getgenv().ErenSettings.NoClip then
+             for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then part.CanCollide = false end
+             end
+          end
+
+          if getgenv().ErenSettings.AntiPush and hrp then
+             hrp.RotVelocity = Vector3.new(0, 0, 0)
+          end
+       end
+
+       if getgenv().ErenSettings.AutoSwing then
+          pcall(function()
+             local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+             if tool then
+                tool:Activate()
+             end
+          end)
+       end
+
+       if getgenv().ErenSettings.HitboxEnabled then
+          for _, player in ipairs(Players:GetPlayers()) do
+             if player ~= LocalPlayer and not IsWhitelisted(player) then
+                if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                   local root = player.Character.HumanoidRootPart
+                   root.Size = Vector3.new(getgenv().ErenSettings.HitboxSize, getgenv().ErenSettings.HitboxSize, getgenv().ErenSettings.HitboxSize)
+                   root.Transparency = 0.6
+                   root.CanCollide = false
+                end
+             end
+          end
+       end
+    end)
+
+    -- ==================== TABS WITH EMOJIS ====================
+    local PlayerTab = Window:CreateTab("🏃 Player", 4483362458)
+    local GuardTab = Window:CreateTab("🛡️ Guard", 4483362458)
+    local MiscTab = Window:CreateTab("⚙️ Miscellaneous", 4483362458)
+    local DetectTab = Window:CreateTab("🕵️ Detective", 4483362458)
+    local GamemodeTab = Window:CreateTab("🎮 Gamemode", 4483362458)
+    local TeleportTab = Window:CreateTab("🌀 Teleport", 4483362458)
+
+    -- ==================== PLAYER TAB ====================
+    PlayerTab:CreateToggle({
+       Name = "⚡ Enable Walk Speed",
+       CurrentValue = false,
+       Callback = function(v) getgenv().ErenSettings.WalkSpeedEnabled = v end,
+    })
+
+    PlayerTab:CreateSlider({
+       Name = "📏 Walkspeed Slider",
+       Range = {16, 300},
+       Increment = 1,
+       CurrentValue = 16,
+       Callback = function(v) getgenv().ErenSettings.WalkSpeed = v end,
+    })
+
+    PlayerTab:CreateToggle({
+       Name = "🦘 Infinite Jump",
+       CurrentValue = false,
+       Callback = function(v) getgenv().ErenSettings.InfiniteJump = v end,
+    })
+
+    UserInputService.JumpRequest:Connect(function()
+       if getgenv().ErenSettings.InfiniteJump and LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+          LocalPlayer.Character:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.Jumping)
+       end
+    end)
+
+    PlayerTab:CreateToggle({
+       Name = "👻 No Clip",
+       CurrentValue = false,
+       Callback = function(v) getgenv().ErenSettings.NoClip = v end,
+    })
+
+    PlayerTab:CreateToggle({
+       Name = "🛡️ Anti-Push",
+       CurrentValue = false,
+       Callback = function(v) getgenv().ErenSettings.AntiPush = v end,
+    })
+
+    PlayerTab:CreateToggle({
+       Name = "🗡️ Auto Swing",
+       CurrentValue = false,
+       Callback = function(v) getgenv().ErenSettings.AutoSwing = v end,
+    })
+
+    PlayerTab:CreateToggle({
+       Name = "👶 Auto Baby Pickup",
+       CurrentValue = false,
+       Callback = function(v)
+          getgenv().ErenSettings.AutoBabyPickup = v
+          Rayfield:Notify({Title = "Baby Pickup", Content = v and "Auto Baby Pick-up Active!" or "Auto Baby Pick-up Deactivated!", Duration = 3})
+       end,
+    })
+
+
+    -- ==================== GUARD TAB ====================
+    GuardTab:CreateToggle({
+       Name = "👥 Friend Protection",
+       CurrentValue = true,
+       Callback = function(v) getgenv().ErenSettings.FriendProtection = v end,
+    })
+
+    GuardTab:CreateToggle({
+       Name = "⚔️ Auto Kill",
+       CurrentValue = false,
+       Callback = function(v) print("Auto Kill:", v) end,
+    })
+
+    GuardTab:CreateToggle({
+       Name = "🧹 Auto Clean",
+       CurrentValue = false,
+       Callback = function(v) print("Auto Clean:", v) end,
+    })
+
+
+    -- ==================== MISCELLANEOUS TAB ====================
+    MiscTab:CreateToggle({
+       Name = "📦 Enable Hitbox",
+       CurrentValue = false,
+       Callback = function(v) getgenv().ErenSettings.HitboxEnabled = v end,
+    })
+
+    MiscTab:CreateSlider({
+       Name = "📏 Hitbox Size",
+       Range = {2, 25},
+       Increment = 1,
+       CurrentValue = 4,
+       Callback = function(v) getgenv().ErenSettings.HitboxSize = v end,
+    })
+
+    MiscTab:CreateToggle({
+       Name = "👥 Friend Protection",
+       CurrentValue = true,
+       Callback = function(v) getgenv().ErenSettings.FriendProtection = v end,
+    })
+
+    MiscTab:CreateInput({
+       Name = "📝 Whitelist User",
+       PlaceholderText = "Enter Username",
+       RemoveTextAfterFocusLost = false,
+       Callback = function(Text)
+          table.insert(getgenv().ErenSettings.Whitelist, Text)
+          Rayfield:Notify({Title = "Whitelist", Content = "Added: " .. Text, Duration = 3})
+       end,
+    })
+
+    MiscTab:CreateButton({
+       Name = "🗑️ Clear Whitelist",
+       Callback = function()
+          getgenv().ErenSettings.Whitelist = {}
+          Rayfield:Notify({Title = "Whitelist", Content = "Whitelist cleared!", Duration = 3})
+       end,
+    })
+
+
+    -- ==================== DETECTIVE TAB ====================
+    DetectTab:CreateToggle({
+       Name = "🔍 Auto Collect",
+       CurrentValue = false,
+       Callback = function(v)
+          getgenv().ErenSettings.AutoCollect = v
+          Rayfield:Notify({Title = "Detective", Content = v and "Auto Collect Active!" or "Auto Collect Deactivated!", Duration = 3})
+       end,
+    })
+
+    DetectTab:CreateToggle({
+       Name = "🌀 Teleport Back",
+       CurrentValue = false,
+       Callback = function(v)
+          getgenv().ErenSettings.TeleportBack = v
+          Rayfield:Notify({Title = "Detective", Content = "Teleport Back set to: " .. tostring(v), Duration = 3})
+       end,
+    })
+
+    DetectTab:CreateToggle({
+       Name = "📍 Island Path Highlighter",
+       CurrentValue = false,
+       Callback = function(v)
+          getgenv().ErenSettings.IslandPathHighlighter = v
+          Rayfield:Notify({Title = "Detective", Content = "Island Path Highlighter set to: " .. tostring(v), Duration = 3})
+       end,
+    })
+
+
+    -- ==================== GAMEMODE TAB ====================
+    GamemodeTab:CreateToggle({
+    Name = "🛑 Red GamemodeTab:CreateToggle({
+    Name = "🛑 Red Light Auto Stop",
+    CurrentValue = false,
+    Callback = function(v)
+    end
+        getgenv().ErenSettings.RedLightAutoStop = v
+
+        Rayfield:Notify({
+            Title = "EREN HUB",
+            Content = v and "Auto Stop Enabled" or "Auto Stop Disabled",
+            Duration = 3
+        })
+    end,
+})o
+             if pane.Name:lower():find("glass") and pane:IsA("BasePart") then
+                pane.Transparency = v and 0.2 or 0
+                pane.Color = v and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(163, 162, 165)
+             end
+          end
+       end,
+    })
+
+    GamemodeTab:CreateToggle({
+       Name = "🪂 Anti Fall",
+       CurrentValue = false,
+       Callback = function(v)
+          getgenv().ErenSettings.AntiFall = v
+          if v then
+             task.spawn(function()
+                while getgenv().ErenSettings.AntiFall do
+                   task.wait(0.2)
+                   pcall(function()
+                      if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                         local hrp = LocalPlayer.Character.HumanoidRootPart
+                         if hrp.Position.Y < -30 then
+                            hrp.CFrame = CFrame.new(hrp.Position.X, 20, hrp.Position.Z)
+                         end
+                      end
+                   end)
+                end
+             end)
+          end
+       end,
+    })
+
+
+    -- ==================== TELEPORT TAB ====================
+    TeleportTab:CreateButton({
+       Name = "📍 Teleport to Lobby",
+       Callback = function()
+          pcall(function()
+             LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(0, 10, 0)
+          end)
+       end,
+    })
+
+    Rayfield:Notify({
+       Title = "👑 EREN OWNER HUB",
+       Content = "Fully Fixed & Ready to Run!",
+       Duration = 5,
+       Image = 4483362458,
+    })
+end)
+
+if not success then
+    warn("Execution Error: " .. tostring(errorMessage))
+end
